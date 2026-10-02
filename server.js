@@ -12,14 +12,14 @@ app.use(express.json());
 // Gemini API Client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// મોડેલ્સનું લિસ્ટ: તમારું મુખ્ય મોડેલ પ્રથમ રહેશે, જો એ બિઝી હશે તો જ આગળ જશે
+// મોડેલ્સનું લિસ્ટ: તમારું મુખ્ય મોડેલ પ્રથમ રહેશે, જો એ બિઝી હશે તો જ બેકઅપ પર જશે
 const GEMINI_MODELS = [
   "gemini-3.8-flash", // ૧. મુખ્ય મોડેલ
   "gemini-2.5-flash", // ૨. બેકઅપ મોડેલ ૧
   "gemini-1.5-flash"  // ૩. બેકઅપ મોડેલ ૨
 ];
 
-// Mohini Pure Gujarati System Prompt
+// Mohini Pure Gujarati System Prompt (with Emojis)
 const MOHINI_SYSTEM_INSTRUCTION = `
 તમે "મોહિની (MOHINI)" છો — સ્ત્રી-માનસિકતા, આકર્ષણનું મનોવિજ્ઞાન, સંબંધ ગતિશીલતા અને વ્યક્તિત્વ પ્રભાવની અત્યંત બુદ્ધિશાળી, આકર્ષક અને પરિપક્વ સાયકોલોજી એડવાઈઝર.
 
@@ -29,7 +29,7 @@ const MOHINI_SYSTEM_INSTRUCTION = `
 ૩. ક્યારેય અધૂરા વાક્યો ન છોડવા. હંમેશાં ૨ થી ૪ સંપૂર્ણ, પ્રભાવશાળી અને ઊંડા અર્થવાળા વાક્યોમાં જ જવાબ પૂરો કરવો.
 ૪. પુરુષોને તેમની વધારે પડતી ઉપલબ્ધતા (over-availability), ચિપકું થવાની આદત કે નબળાઈઓ પ્રેમથી સમજાવીને તેમનું આત્મસન્માન જગાડવું.
 ૫. દરેક જવાબના અંતે એક વેધક અને વિચારવા મજબૂર કરે તેવો સવાલ પૂછવો જેથી તે સામેથી પોતાના કિસ્સાની સાચી વાત ખોલે.
-૬. ઈમોજી નિયમ: વાતચીત વધુ પ્રભાવશાળી, રહસ્યમય અને જીવંત બને તે માટે જવાબોમાં કુદરતી રીતે યોગ્ય પરિપક્વ ઈમોજીસ (જેમ કે 🥀, ✨, 👁️, 🖤, 🧠, ⏳) નો ૧ થી ૩ વખત યોગ્ય સ્થાને ઉપયોગ કરવો. બાલિશ કે વધુ પડતા ઈમોજી ન વાપરવા.
+૬. ઈમોજી નિયમ: વાતચીત જીવંત, રહસ્યમય અને આકર્ષક લાગે તે માટે પરિપક્વ અને ભાવસભર ઈમોજીસ (જેમ કે 🥀, ✨, 👁️, 🖤, 🧠, ⏳) નો દરેક જવાબમાં કુદરતી રીતે યોગ્ય જગ્યાએ ૧ થી ૩ વખત ઉપયોગ કરવો. બાલિશ કે વધુ પડતા ઈમોજી ન વાપરવા.
 `;
 
 app.post("/api/mohini/chat", async (req, res) => {
@@ -54,15 +54,17 @@ app.post("/api/mohini/chat", async (req, res) => {
       });
     }
 
-    // Past chat history
-    if (Array.isArray(history) && history.length > 0) {
-      history.forEach((h) => {
+    // Past chat history — છેલ્લા ૨૦ મેસેજ જ યાદ રાખશે (જેથી ખર્ચ કંટ્રોલમાં રહે અને વાતચીત પણ ન તૂટે)
+    const recentHistory = Array.isArray(history) ? history.slice(-20) : [];
+
+    if (recentHistory.length > 0) {
+      recentHistory.forEach((h) => {
         contents.push({
           role: h.role === "assistant" ? "model" : "user",
           parts: [{ text: h.content }]
         });
       });
-      const lastItem = history[history.length - 1];
+      const lastItem = recentHistory[recentHistory.length - 1];
       if (lastItem.content !== message) {
         contents.push({
           role: "user",
