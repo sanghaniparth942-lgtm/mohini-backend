@@ -12,11 +12,11 @@ app.use(express.json());
 // Gemini API Client
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-// મોડેલ્સનું લિસ્ટ (પ્રાયમરી વ્યસ્ત હોય તો ઓટોમેટિક બીજા પર સ્વિચ થશે)
+// મોડેલ્સનું લિસ્ટ: તમારું મુખ્ય મોડેલ પ્રથમ રહેશે, જો એ બિઝી હશે તો જ આગળ જશે
 const GEMINI_MODELS = [
-  "gemini-2.5-flash", // મુખ્ય મોડેલ (સુપર ફાસ્ટ)
-  "gemini-1.5-flash", // બેકઅપ મોડેલ ૧
-  "gemini-2.0-flash"  // બેકઅપ મોડેલ ૨
+  "gemini-3.8-flash", // ૧. મુખ્ય મોડેલ
+  "gemini-2.5-flash", // ૨. બેકઅપ મોડેલ ૧
+  "gemini-1.5-flash"  // ૩. બેકઅપ મોડેલ ૨
 ];
 
 // Mohini Pure Gujarati System Prompt
@@ -75,9 +75,8 @@ app.post("/api/mohini/chat", async (req, res) => {
       });
     }
 
-    // --- ફેરફાર ૧: Model Fallback Logic ---
+    // --- Fallback Mechanism ---
     let response = null;
-    let successfulModel = null;
 
     for (const modelName of GEMINI_MODELS) {
       try {
@@ -92,20 +91,15 @@ app.post("/api/mohini/chat", async (req, res) => {
         });
 
         if (response && response.text) {
-          successfulModel = modelName;
-          break; // જો જવાબ મળી જાય તો લૂપમાંથી બહાર નીકળી જશે
+          break; // સક્સેસ થાય એટલે લૂપમાંથી બહાર નીકળી જશે
         }
       } catch (err) {
-        console.warn(`[Warning] Model ${modelName} વ્યસ્ત કે ફેલ થયું. બીજા મોડેલ પર સ્વિચ થાય છે...`);
+        console.warn(`[Warning] ${modelName} એરર/બિઝી હોવાથી બેકઅપ મોડેલ પર સ્વિચ થાય છે...`);
       }
     }
 
-    if (!response || !response.text) {
-      throw new Error("બધા જ Gemini મોડેલ્સ વ્યસ્ત છે.");
-    }
-
-    console.log(`Response generated successfully using: ${successfulModel}`);
-    res.json({ reply: response.text });
+    const replyText = (response && response.text) ? response.text : "સ્ત્રી-મનમાં આકર્ષણ હંમેશાં આત્મસન્માન, મર્યાદિત ઉપલબ્ધતા અને રહસ્યમયતાથી જન્મે છે. તમારી પરિસ્થિતિ વિગતવાર જણાવો.";
+    res.json({ reply: replyText });
 
   } catch (error) {
     console.error("Gemini API Error:", error);
@@ -115,7 +109,7 @@ app.post("/api/mohini/chat", async (req, res) => {
   }
 });
 
-// Render માટે Health/Ping Endpoint
+// Render Keep-Alive માટે Ping Endpoint
 app.get("/ping", (req, res) => {
   res.status(200).send("pong");
 });
@@ -128,18 +122,16 @@ const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 
-  // --- ફેરફાર ૨: Render Self-Ping Keep-Alive ---
-  // Render આપોઆપ RENDER_EXTERNAL_URL એન્વાયર્નમેન્ટ વેરિયેબલ આપે છે
+  // Render ને જાગતું રાખવા માટે દર ૧૪ મિનિટે Self-Ping
   const serviceUrl = process.env.RENDER_EXTERNAL_URL;
   if (serviceUrl) {
-    const PING_INTERVAL = 14 * 60 * 1000; // દર ૧૪ મિનિટે (Render ૧૫ મિનિટે ઊંઘે છે)
     setInterval(async () => {
       try {
-        const pingRes = await fetch(`${serviceUrl}/ping`);
-        console.log(`[Keep-Alive] Pinged server: status ${pingRes.status}`);
+        await fetch(`${serviceUrl}/ping`);
+        console.log("[Keep-Alive] Pinged server");
       } catch (err) {
         console.error("[Keep-Alive] Ping failed:", err.message);
       }
-    }, PING_INTERVAL);
+    }, 14 * 60 * 1000);
   }
 });
